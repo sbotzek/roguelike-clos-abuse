@@ -25,7 +25,16 @@
          (handler-fun (handler handler)))
     (if handler-fun
         (funcall handler-fun cmd args)
-        (format t "What!?~%"))))
+        (format t "What!? (type 'commands' to view all commands)~%"))))
+
+
+(add-input-handler
+ "commands"
+ (lambda (cmd args)
+   (declare (ignore cmd)
+            (ignore args))
+   (loop for handler in *input-handlers*
+         do (format t "~a~%" (cmd handler)))))
 
 ; parses an argument from the input
 ; returns next-arg, rest
