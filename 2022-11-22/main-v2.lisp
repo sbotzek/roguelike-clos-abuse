@@ -1,3 +1,6 @@
+;;;; A very basic input parser & processor
+;;;; To be used for a roguelike/mud.
+
 (defparameter *quit* t)
 
 (defclass input-handler ()
@@ -36,8 +39,8 @@
    (loop for handler in *input-handlers*
          do (format t "~a~%" (cmd handler)))))
 
-; parses an argument from the input
-; returns next-arg, rest
+;;; parses an argument from the input
+;;; returns next-arg, rest
 (defun parse-argument (input)
   (let ((idx (position #\Space input)))
     (if idx
@@ -45,8 +48,8 @@
                 (string-left-trim '(#\Space #\Tab) (subseq input (1+ idx))))
         (values input nil))))
 
-; parses all arguments from the input
-; returns multiple values
+;;; parses all arguments from the input
+;;; returns multiple values
 (defun parse-all-arguments (input)
   (labels ((compute (in sofar)
              (multiple-value-bind (arg rest) (parse-argument in)

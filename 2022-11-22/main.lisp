@@ -1,11 +1,13 @@
+;;;; A very basic input parser & processor
+;;;; To be used for a roguelike/mud.
 (defparameter *quit* t)
 
 (defgeneric handle-input (cmd args))
 (defmethod handle-input (cmd args)
   (format t "What!?~%"))
 
-; parses an argument from the input
-; returns next-arg, rest
+;;; parses an argument from the input
+;;; returns next-arg, rest
 (defun parse-argument (input)
   (let ((idx (position #\Space input)))
     (if idx
@@ -13,8 +15,8 @@
                 (string-left-trim '(#\Space #\Tab) (subseq input (1+ idx))))
         (values input nil))))
 
-; parses all arguments from the input
-; returns multiple values
+;;; parses all arguments from the input
+;;; returns multiple values
 (defun parse-all-arguments (input)
   (labels ((compute (in sofar)
              (multiple-value-bind (arg rest) (parse-argument in)
@@ -23,13 +25,13 @@
                    (reverse sofar)))))
     (values-list (compute input '()))))
 
-; main game loop
+;;; main game loop
 (defun game-loop ()
   (format t "~%> ")
   (let ((input (string-trim '(#\Space #\Tab) (read-line))))
     (when (not (equal "" input))
       (multiple-value-bind (cmd-str args) (parse-argument input)
-        ; I'm pretty sure interning user input is a terrible idea... oh well
+        ;; I'm pretty sure interning user input is a terrible idea... oh well
         (handle-input (intern (string-upcase cmd-str) :keyword) args)))
     (when (not *quit*)
       (game-loop))))
