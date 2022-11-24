@@ -11,7 +11,7 @@
   nil)
 
 (defparameter *input-handlers* '())
-(defun add-input-handler (cmd handler)
+(defun input-handler (cmd handler)
   (when (some (lambda (h) (equal (cmd h) cmd)) *input-handlers*)
     (error (format nil "There is already a '~a' cmd input handler." cmd)))
   (setf *input-handlers* (cons (make-instance 'input-handler :cmd cmd :handler handler)
@@ -28,7 +28,7 @@
         (format t "What!? (type 'commands' to view all commands)~%"))))
 
 
-(add-input-handler
+(input-handler
  "commands"
  (lambda (cmd args)
    (declare (ignore cmd)
@@ -71,7 +71,7 @@
 
 
 
-(add-input-handler
+(input-handler
  "quit"
  (lambda (cmd args)
    (declare (ignore cmd)
@@ -79,7 +79,7 @@
    (format t "Goodbye!~%")
    (setf *quit* t)))
 
-(add-input-handler
+(input-handler
  "look"
  (lambda (cmd args)
    (declare (ignore cmd))

@@ -7,3 +7,5 @@ The way I did the input parser isn't great.  And I'm pretty sure interning user 
 
 ## Version 2
 At the very least, I should support listing commands.  And I don't know if it's possible with how I did things before.
+
+So I switched it to just be a list of input handlers rather than relying on CLOS.
