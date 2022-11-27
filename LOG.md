@@ -1,5 +1,10 @@
 # Development Log
 
+# 2022-11-27
+Let's make a real map generator.
+
+It will create a certain number of rooms, and connect those rooms via corridoors.
+
 # 2022-11-24
 Let's get some of the world in.  The first question is: what positioning system?
 
