@@ -1,5 +1,22 @@
 # Development Log
 
+# 2022-11-24
+Let's get some of the world in.  The first question is: what positioning system?
+
+In a MUD, you usually have a graph of rooms.  You are in a single room, you see everything in your room, and 95% of all interactions are with things in your room.  You move directions to go into other rooms.
+
+Or, we could do more of a 2d gridded map - like positioning on a piece of graph paper.  Which is more like a roguelike.
+
+Let's go with a simple roguelike system.
+
+Positions will be discrete - so you're at 1,1, or 3,3, etc.
+
+Everything will only have a singular position - even very large creatures like dragons.  Nothing will be at multiple positions.
+
+As far as collision goes, monsters will block a position, but items won't.  This won't be hard coded to monsters or items, it will just be a standard default for them which can be overridden.
+
+We'll also have to define something to represent the player so we can move that around the map.  It's going to be as barebones as possible.
+
 # 2022-11-22
 Project started.  I wrote a very basic game loop and input parser.
 
