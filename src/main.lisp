@@ -148,15 +148,22 @@
                 (rect->positions rect2)))
         (rect->positions rect1)))
 
-(defun create-horizontal-tunnel (map x1 x2 y)
+(defun dig-horizontal-tunnel (map x1 x2 y)
   (loop for x from (min x1 x2) upto (max x1 x2)
         for pos = (to-pos x y)
         do (setf (gethash pos map) (make-instance 'tile))))
 
-(defun create-vertical-tunnel (map y1 y2 x)
+(defun dig-vertical-tunnel (map y1 y2 x)
   (loop for y from (min y1 y2) upto (max y1 y2)
         for pos = (to-pos x y)
         do (setf (gethash pos map) (make-instance 'tile))))
+
+(defun connect-rooms (map room1 room2)
+  (let* ((roll (random 2))
+         (center1 (rect-center (if (= 0 roll) room1 room2)))
+         (center2 (rect-center (if (= 0 roll) room2 room1))))
+    (dig-horizontal-tunnel map (pos-x center1) (pos-x center2) (pos-y center2))
+    (dig-vertical-tunnel map (pos-y center1) (pos-y center2) (pos-x center1))))
 
 (defun generate-map (width height player)
   (setq *map* (make-hash-table :test #'equal))
@@ -179,11 +186,7 @@
                    (setf (thingy-pos player) (rect-center room)))
                  ;; connect the rooms
                  (when last-room
-                   (let* ((roll (random 2))
-                          (center1 (rect-center (if (= 0 roll) last-room room)))
-                          (center2 (rect-center (if (= 0 roll) room last-room))))
-                     (create-horizontal-tunnel *map* (pos-x center1) (pos-x center2) (pos-y center2))
-                     (create-vertical-tunnel *map* (pos-y center1) (pos-y center2) (pos-x center1))))
+                   (connect-rooms *map* room last-room))
                  (setf last-room room)
                  (push room rooms))))))
 
