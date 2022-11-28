@@ -5,6 +5,8 @@ Let's make a real map generator.
 
 It will create a certain number of rooms, and connect those rooms via corridoors.
 
+The algorithm is pretty straight forward: it creates a "room" of tiles in the map.  It then connects the center of the room to the center of the previous room.
+
 # 2022-11-24
 Let's get some of the world in.  The first question is: what positioning system?
 
