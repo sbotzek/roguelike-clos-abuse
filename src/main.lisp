@@ -30,12 +30,15 @@
 (defun handle-input (thingy cmd args)
   (let* ((downcase-cmd (string-downcase cmd))
          (handler (loop for handler in *input-handlers*
-                       when (equal downcase-cmd (cmd handler))
-                         return handler))
+                        when (equal downcase-cmd (cmd handler))
+                          return handler))
          (handler-fun (handler handler)))
     (if handler-fun
         (funcall handler-fun thingy cmd args)
-        (format t "What!? (type 'commands' to view all commands)~%"))))
+        (if (every (lambda (ch) (or (eql ch #\n) (eql ch #\s) (eql ch #\e) (eql ch #\w))) (string-downcase cmd))
+            (mapcar (lambda (ch) (handle-input thingy (format nil "~a" ch) ""))
+                    (coerce cmd 'list))
+            (format t "What!? (type 'commands' to view all commands)~%")))))
 
 (input-handler
  "commands"
@@ -87,6 +90,7 @@
 
 (defparameter *player* nil)
 (defparameter *thingies* '())
+(defparameter *monster-table* '())
 
 (defun thingies-at (pos)
   (loop for thingy in *thingies*
@@ -94,8 +98,26 @@
           collect thingy))
 
 (defun add-thingy (thingy)
-  (push *thingies* thingy))
+  (push thingy *thingies*))
 
+(defclass goblin (thingy)
+  ((name :initform "goblin")
+   (char :initform "g")
+   (blocks :initform t)))
+
+(defclass orc (thingy)
+  ((name :initform "orc")
+   (char :initform "o")
+   (blocks :initform t)))
+
+(defclass troll (thingy)
+  ((name :initform "troll")
+   (char :initform "T")
+   (blocks :initform t)))
+
+(setf *monster-table* (list (cons 50 'goblin)
+                            (cons 90 'orc)
+                            (cons 100 'troll)))
 
 ;;; da world
 (defclass tile ()
@@ -109,12 +131,16 @@
 (defparameter *map-width* 100)
 (defparameter *map-height* 100)
 (defparameter *max-rooms* 30)
+(defparameter *max-room-monsters* 3)
 (defparameter *max-room-size* 10)
 (defparameter *min-room-size* 6)
 
 ;;; returns a random number in the range (inclusive)
 (defun random-range (from to)
   (+ from (random (1+ (- to from)))))
+
+(defun random-percent ()
+  (1+ (random 100)))
 
 (defclass rect ()
   ((x1 :initarg :x1
@@ -147,6 +173,18 @@
                   (equal pos pos2))
                 (rect->positions rect2)))
         (rect->positions rect1)))
+
+(defun spawn-monsters (map room)
+  (loop for i from 1 upto (random (1+ *max-room-monsters*))
+        do (let* ((roll (random-percent))
+                  (monster-type (cdr (find-if (lambda (m) (>= (car m) roll)) *monster-table*)))
+                  (pos (to-pos (random-range (rect-x1 room) (rect-x2 room))
+                               (random-range (rect-y1 room) (rect-y2 room)))))
+                  (when (not (blocked (gethash pos map)))
+                    (let ((monster (make-instance monster-type)))
+                      (setf (thingy-pos monster) pos)
+                      (setf (blocked (gethash pos map)) t)
+                      (add-thingy monster))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   (loop for x from (min x1 x2) upto (max x1 x2)
@@ -184,6 +222,7 @@
                  ;; player is set to the first room
                  (when (not set-player-pos)
                    (setf (thingy-pos player) (rect-center room)))
+                 (spawn-monsters *map* room)
                  ;; connect the rooms
                  (when last-room
                    (connect-rooms *map* room last-room))
@@ -298,13 +337,16 @@
   (let* ((pos (thingy-pos thingy))
          (new-pos (dir-pos dir pos))
          (tile (gethash new-pos *map*)))
-    (if (or (not tile) (blocked tile))
-        (format t "You cannot move ~a.~%" (dir-name dir))
-        (progn (format t "You move ~a.~%" (dir-name dir))
-               (setf (blocked (gethash pos *map*)) nil)
-               (setf (blocked (gethash new-pos *map*)) t)
-               (setf (thingy-pos thingy) new-pos)
-               (do-scan thingy)))))
+    (cond
+      ((not tile)
+       (format t "You cannot move ~a.~%" (dir-name dir)))
+      ((blocked tile)
+       (format t "Someone is already in there.~%"))
+      (t (progn (format t "You move ~a.~%" (dir-name dir))
+                (setf (blocked (gethash pos *map*)) nil)
+                (setf (blocked (gethash new-pos *map*)) t)
+                (setf (thingy-pos thingy) new-pos)
+                (do-scan thingy))))))
 
 (input-handler
  '("n" "s" "e" "w")
