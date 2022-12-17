@@ -46,7 +46,8 @@
    (declare (ignore cmd)
             (ignore args)
             (ignore thingy))
-   (loop for handler in *input-handlers*
+   (loop for
+handler in *input-handlers*
          do (format t "~a~%" (cmd handler)))))
 
 ;;; parses an argument from the input
@@ -135,6 +136,16 @@
 (defparameter *max-room-size* 10)
 (defparameter *min-room-size* 6)
 
+
+(defun move-to (thingy new-pos)
+  (let ((pos (thingy-pos thingy)))
+    (when (blocks thingy)
+      (when pos
+        (setf (blocked (gethash pos *map*)) nil))
+      (setf (blocked (gethash new-pos *map*)) t))
+    (setf (thingy-pos thingy) new-pos)))
+
+
 ;;; returns a random number in the range (inclusive)
 (defun random-range (from to)
   (+ from (random (1+ (- to from)))))
@@ -182,9 +193,8 @@
                                (random-range (rect-y1 room) (rect-y2 room)))))
                   (when (not (blocked (gethash pos map)))
                     (let ((monster (make-instance monster-type)))
-                      (setf (thingy-pos monster) pos)
-                      (setf (blocked (gethash pos map)) t)
-                      (add-thingy monster))))))
+                      (add-thingy monster)
+                      (move-to monster pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   (loop for x from (min x1 x2) upto (max x1 x2)
@@ -221,7 +231,7 @@
                        do (setf (gethash pos *map*) (make-instance 'tile)))
                  ;; player is set to the first room
                  (when (not set-player-pos)
-                   (setf (thingy-pos player) (rect-center room)))
+                   (move-to player (rect-center room)))
                  (spawn-monsters *map* room)
                  ;; connect the rooms
                  (when last-room
@@ -255,10 +265,9 @@
   (setf *player* (make-instance 'thingy
                                 :name "player"
                                 :char '@'
-                                :pos (to-pos -1 -1)
                                 :blocks t))
-  (generate-map *map-width* *map-height* *player*)
-  (add-thingy *player*))
+  (add-thingy *player*)
+  (generate-map *map-width* *map-height* *player*))
 
 (defun main ()
   (init)
@@ -343,9 +352,7 @@
       ((blocked tile)
        (format t "Someone is already in there.~%"))
       (t (progn (format t "You move ~a.~%" (dir-name dir))
-                (setf (blocked (gethash pos *map*)) nil)
-                (setf (blocked (gethash new-pos *map*)) t)
-                (setf (thingy-pos thingy) new-pos)
+                (move-to thingy new-pos)
                 (do-scan thingy))))))
 
 (input-handler

@@ -1,5 +1,10 @@
 # Development Log
 
+# 2022-12-17
+Lets line of sight and mapping mechanics.
+
+The game should only draw parts of the map you've seen before.  And it should only draw things that are in line of sight.
+
 # 2022-11-27
 Let's make a real map generator.
 
