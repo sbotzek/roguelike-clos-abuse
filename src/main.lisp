@@ -81,6 +81,9 @@ handler in *input-handlers*
    (pos :initarg :pos
              :initform nil
              :accessor thingy-pos)
+   (vision :initarg :vision
+           :initform 10
+           :accessor vision)
    (blocks :initarg :blocks
             :initform nil
             :accessor blocks)))
@@ -88,6 +91,10 @@ handler in *input-handlers*
 (defun to-pos (x y) (cons x y))
 (defun pos-x (pos) (car pos))
 (defun pos-y (pos) (cdr pos))
+(defun distance (pos1 pos2)
+  (sqrt
+   (+ (expt (- (pos-x pos1) (pos-x pos2)) 2)
+      (expt (- (pos-y pos1) (pos-y pos2)) 2))))
 
 (defparameter *player* nil)
 (defparameter *thingies* '())
@@ -145,6 +152,9 @@ handler in *input-handlers*
       (setf (blocked (gethash new-pos *map*)) t))
     (setf (thingy-pos thingy) new-pos)))
 
+(defun can-see (thingy pos)
+  (> (vision thingy)
+     (distance (thingy-pos thingy) pos)))
 
 ;;; returns a random number in the range (inclusive)
 (defun random-range (from to)
@@ -299,15 +309,17 @@ handler in *input-handlers*
   (let* ((pos (thingy-pos thingy))
          (x (pos-x pos))
          (y (pos-y pos)))
-    (loop for y from (- y 15) upto (+ y 15)
+    (loop for y from (- y (vision thingy)) upto (+ y (vision thingy))
           do (progn
-               (loop for x from (- x 15) upto (+ x 15)
+               (loop for x from (- x (vision thingy)) upto (+ x (vision thingy))
                      do (let* ((map-pos (to-pos x y))
                                (tile (gethash map-pos *map*))
                                (map-thingy (car (thingies-at map-pos))))
                           (cond
                             ((equal pos map-pos)
                              (princ (thingy-char thingy)))
+                            ((not (can-see thingy map-pos))
+                             (princ " "))
                             (map-thingy
                              (princ (thingy-char map-thingy)))
                             (tile

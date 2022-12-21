@@ -5,6 +5,9 @@ Lets line of sight and mapping mechanics.
 
 The game should only draw parts of the map you've seen before.  And it should only draw things that are in line of sight.
 
+Some options:
+http://www.roguebasin.com/index.php/Field_of_Vision
+
 # 2022-11-27
 Let's make a real map generator.
 
