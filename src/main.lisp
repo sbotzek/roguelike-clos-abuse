@@ -91,10 +91,30 @@ handler in *input-handlers*
 (defun to-pos (x y) (cons x y))
 (defun pos-x (pos) (car pos))
 (defun pos-y (pos) (cdr pos))
+(defun pos-sub (pos1 pos2)
+  (to-pos (- (pos-x pos1) (pos-x pos2))
+          (- (pos-y pos1) (pos-y pos2))))
+(defun pos-add (pos1 pos2)
+  (to-pos (+ (pos-x pos1) (pos-x pos2))
+          (+ (pos-y pos1) (pos-y pos2))))
+(defun pos-mul (pos m)
+  (to-pos (round (* (pos-x pos) m))
+          (round (* (pos-y pos) m))))
 (defun distance (pos1 pos2)
   (sqrt
    (+ (expt (- (pos-x pos1) (pos-x pos2)) 2)
       (expt (- (pos-y pos1) (pos-y pos2)) 2))))
+(defun points-between (pos1 pos2)
+  (let ((pos-diff (pos-sub pos2 pos1))
+        (last-pos nil))
+    (loop for i from 1 upto 19
+          for new-pos = (pos-add pos1
+                           (pos-mul pos-diff (* 0.05 i)))
+          when (and (not (equal last-pos new-pos))
+                    (not (equal pos1 new-pos))
+                    (not (equal pos2 new-pos)))
+          collect new-pos
+          do (setf last-pos new-pos))))
 
 (defparameter *player* nil)
 (defparameter *thingies* '())
@@ -143,7 +163,6 @@ handler in *input-handlers*
 (defparameter *max-room-size* 10)
 (defparameter *min-room-size* 6)
 
-
 (defun move-to (thingy new-pos)
   (let ((pos (thingy-pos thingy)))
     (when (blocks thingy)
@@ -152,9 +171,17 @@ handler in *input-handlers*
       (setf (blocked (gethash new-pos *map*)) t))
     (setf (thingy-pos thingy) new-pos)))
 
-(defun can-see (thingy pos)
-  (> (vision thingy)
-     (distance (thingy-pos thingy) pos)))
+(defun has-los-p (map thingy pos)
+  (not
+   (loop for point in (points-between (thingy-pos thingy) pos)
+         for tile = (gethash point map)
+         when (not tile)
+           return t)))
+
+(defun can-see-p (map thingy pos)
+  (and (> (vision thingy)
+          (distance (thingy-pos thingy) pos))
+       (has-los-p map thingy pos)))
 
 ;;; returns a random number in the range (inclusive)
 (defun random-range (from to)
@@ -318,13 +345,13 @@ handler in *input-handlers*
                           (cond
                             ((equal pos map-pos)
                              (princ (thingy-char thingy)))
-                            ((not (can-see thingy map-pos))
+                            ((not (can-see-p *map* thingy map-pos))
                              (princ " "))
                             (map-thingy
                              (princ (thingy-char map-thingy)))
                             (tile
-                             (princ " "))
-                            (t (princ "X")))))
+                             (princ "."))
+                            (t (princ "#")))))
                (format t "~%")))))
 
 (input-handler
