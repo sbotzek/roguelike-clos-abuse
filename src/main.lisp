@@ -86,7 +86,13 @@ handler in *input-handlers*
            :accessor vision)
    (blocks :initarg :blocks
             :initform nil
-            :accessor blocks)))
+            :accessor blocks)
+   (traits :initargs :traits
+           :initform nil
+           :accessor traits)))
+
+(defun has-trait-p (thingy trait)
+  (assoc trait (traits thingy)))
 
 (defun to-pos (x y) (cons x y))
 (defun pos-x (pos) (car pos))
@@ -172,11 +178,13 @@ handler in *input-handlers*
     (setf (thingy-pos thingy) new-pos)))
 
 (defun has-los-p (map thingy pos)
-  (not
-   (loop for point in (points-between (thingy-pos thingy) pos)
-         for tile = (gethash point map)
-         when (not tile)
-           return t)))
+  (cond
+    ((has-trait-p thingy :x-ray-vision) t)
+    (t (not
+        (loop for point in (points-between (thingy-pos thingy) pos)
+              for tile = (gethash point map)
+              when (not tile)
+                return t)))))
 
 (defun can-see-p (map thingy pos)
   (and (> (vision thingy)
