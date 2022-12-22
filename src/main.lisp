@@ -78,6 +78,9 @@
    (char :initarg :char
          :initform nil
          :accessor thingy-char)
+   (map :initargs :map
+        :initform nil
+        :accessor thingy-map)
    (pos :initarg :pos
         :initform nil
         :accessor thingy-pos)
@@ -176,30 +179,32 @@
 (defparameter *max-room-size* 10)
 (defparameter *min-room-size* 6)
 
-(defun place-at (thingy new-pos)
-  "Places a thingy at a position."
-  (let ((pos (thingy-pos thingy)))
+(defun place-at (thingy new-map new-pos)
+  "Places a thingy in a map at a position."
+  (let ((old-map (thingy-map thingy))
+        (pos (thingy-pos thingy)))
     (when (blocks thingy)
-      (when pos
-        (setf (blocked (gethash pos *map*)) nil))
-      (setf (blocked (gethash new-pos *map*)) t))
+      (when (and pos old-map)
+        (setf (blocked (gethash pos old-map)) nil))
+      (setf (blocked (gethash new-pos new-map)) t))
+    (setf (thingy-map thingy) new-map)
     (setf (thingy-pos thingy) new-pos)))
 
-(defgeneric has-los-p (map thingy pos)
+(defgeneric has-los-p (thingy pos)
   (:documentation "Checks to see if a thingy has line of site to the position."))
-(defmethod has-los-p (map thingy pos)
+(defmethod has-los-p (thingy pos)
   "Default implementation."
   (not
    (loop for point in (points-between (thingy-pos thingy) pos)
-         for tile = (gethash point map)
+         for tile = (gethash point (thingy-map thingy))
          when (not tile)
            return t)))
 
-(defun can-see-p (map thingy pos)
+(defun can-see-p (thingy pos)
   "Checks to see if thingy can see a position."
   (and (> (vision thingy)
           (distance (thingy-pos thingy) pos))
-       (has-los-p map thingy pos)))
+       (has-los-p thingy pos)))
 
 (defun random-range (from to)
   "Returns a random number in the range (inclusive)."
@@ -252,7 +257,7 @@
              (when (not (blocked (gethash pos map)))
                (let ((monster (make-instance monster-type)))
                  (add-thingy monster)
-                 (place-at monster pos))))))
+                 (place-at monster map pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   "Digs a horizontal tunnel from x1 to x2 at y."
@@ -293,7 +298,7 @@
                        do (setf (gethash pos *map*) (make-instance 'tile)))
                  ;; player is set to the first room
                  (when (not set-player-pos)
-                   (place-at player (rect-center room)))
+                   (place-at player *map* (rect-center room)))
                  (spawn-monsters *map* room)
                  ;; connect the rooms
                  (when last-room
@@ -359,20 +364,21 @@
          (format t "Look at what?~%")))))
 
 (defun draw-map (thingy)
-  "Draws the map."
-  (let* ((pos (thingy-pos thingy))
+  "Draws the map for thingy."
+  (let* ((map (thingy-map thingy))
+         (pos (thingy-pos thingy))
          (x (pos-x pos))
          (y (pos-y pos)))
     (loop for y from (- y (vision thingy)) upto (+ y (vision thingy))
           do (progn
                (loop for x from (- x (vision thingy)) upto (+ x (vision thingy))
                      do (let* ((map-pos (to-pos x y))
-                               (tile (gethash map-pos *map*))
+                               (tile (gethash map-pos map))
                                (map-thingy (car (thingies-at map-pos))))
                           (cond
                             ((equal pos map-pos)
                              (princ (thingy-char thingy)))
-                            ((not (can-see-p *map* thingy map-pos))
+                            ((not (can-see-p thingy map-pos))
                              (princ " "))
                             (map-thingy
                              (princ (thingy-char map-thingy)))
@@ -414,14 +420,14 @@
   "Tries to move the thingy the direction."
   (let* ((pos (thingy-pos thingy))
          (new-pos (dir-pos dir pos))
-         (tile (gethash new-pos *map*)))
+         (tile (gethash new-pos (thingy-map thingy))))
     (cond
       ((not tile)
        (format t "You cannot move ~a.~%" (dir-name dir)))
       ((blocked tile)
        (format t "Someone is already in there.~%"))
       (t (progn (format t "You move ~a.~%" (dir-name dir))
-                (place-at thingy new-pos)
+                (place-at thingy (thingy-map thingy) new-pos)
                 (draw-map thingy))))))
 
 (input-handler
@@ -483,7 +489,7 @@
                     do (format t "~a~%" trait-name))))))
 
 (defclass trait-x-ray-vision (trait) ())
-(defmethod has-los-p (map (thingy trait-x-ray-vision) pos)
+(defmethod has-los-p ((thingy trait-x-ray-vision) pos)
   "x-ray-vision always gives you line of sight."
   t)
 
