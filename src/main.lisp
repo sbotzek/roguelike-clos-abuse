@@ -131,18 +131,7 @@
           do (setf last-pos new-pos))))
 
 (defparameter *player* nil)
-(defparameter *thingies* '())
 (defparameter *monster-table* '())
-
-(defun thingies-at (pos)
-  "Returns all thingies at the position."
-  (loop for thingy in *thingies*
-        if (equal (thingy-pos thingy) pos)
-          collect thingy))
-
-(defun add-thingy (thingy)
-  "Adds a thingy to the list of thingies."
-  (push thingy *thingies*))
 
 (defclass goblin (thingy)
   ((name :initform "goblin")
@@ -171,13 +160,26 @@
    (blocked :initarg :blocked
             :initform nil
             :accessor blocked)))
-(defparameter *map* nil)
-(defparameter *map-width* 100)
-(defparameter *map-height* 100)
-(defparameter *max-rooms* 30)
-(defparameter *max-room-monsters* 3)
-(defparameter *max-room-size* 10)
-(defparameter *min-room-size* 6)
+
+(defclass rmap ()
+  ((tiles :initarg :tiles
+          :initform (make-hash-table :test #'equal)
+          :accessor map-tiles)
+   (thingies :initarg :thingies
+             :initform nil
+             :accessor map-thingies)
+   (start-pos :initarg :start-pos
+              :initform nil
+              :accessor map-start-pos)))
+
+(defun map-tile-at (map pos)
+  (gethash pos (map-tiles map)))
+
+(defun thingies-at (map pos)
+  "Returns all thingies at the position."
+  (loop for thingy in (map-thingies map)
+        if (equal (thingy-pos thingy) pos)
+          collect thingy))
 
 (defun place-at (thingy new-map new-pos)
   "Places a thingy in a map at a position."
@@ -185,8 +187,12 @@
         (pos (thingy-pos thingy)))
     (when (blocks thingy)
       (when (and pos old-map)
-        (setf (blocked (gethash pos old-map)) nil))
-      (setf (blocked (gethash new-pos new-map)) t))
+        (setf (blocked (map-tile-at old-map pos)) nil))
+      (setf (blocked (map-tile-at new-map new-pos)) t))
+    (when (not (eq new-map old-map))
+      (when old-map
+        nil) ; TODO need to remove from old map
+      (push thingy (map-thingies new-map)))
     (setf (thingy-map thingy) new-map)
     (setf (thingy-pos thingy) new-pos)))
 
@@ -196,7 +202,7 @@
   "Default implementation."
   (not
    (loop for point in (points-between (thingy-pos thingy) pos)
-         for tile = (gethash point (thingy-map thingy))
+         for tile = (map-tile-at (thingy-map thingy) point)
          when (not tile)
            return t)))
 
@@ -247,29 +253,28 @@
                 (rect->positions rect2)))
         (rect->positions rect1)))
 
-(defun spawn-monsters (map room)
+(defun spawn-monsters (map room max-monsters)
   "Spawns monsters in the room."
-  (loop for i from 1 upto (random (1+ *max-room-monsters*))
+  (loop for i from 1 upto (random (1+ max-monsters))
         do (let* ((roll (random-percent))
                   (monster-type (cdr (find-if (lambda (m) (>= (car m) roll)) *monster-table*)))
                   (pos (to-pos (random-range (rect-x1 room) (rect-x2 room))
                                (random-range (rect-y1 room) (rect-y2 room)))))
-             (when (not (blocked (gethash pos map)))
+             (when (not (blocked (map-tile-at map pos)))
                (let ((monster (make-instance monster-type)))
-                 (add-thingy monster)
                  (place-at monster map pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   "Digs a horizontal tunnel from x1 to x2 at y."
   (loop for x from (min x1 x2) upto (max x1 x2)
         for pos = (to-pos x y)
-        do (setf (gethash pos map) (make-instance 'tile))))
+        do (setf (gethash pos (map-tiles map)) (make-instance 'tile))))
 
 (defun dig-vertical-tunnel (map y1 y2 x)
   "Digs a vertical tunnel from y1 to y2 at x."
   (loop for y from (min y1 y2) upto (max y1 y2)
         for pos = (to-pos x y)
-        do (setf (gethash pos map) (make-instance 'tile))))
+        do (setf (gethash pos (map-tiles map)) (make-instance 'tile))))
 
 (defun connect-rooms (map room1 room2)
   "Connects room1 with room2."
@@ -279,10 +284,16 @@
     (dig-horizontal-tunnel map (pos-x center1) (pos-x center2) (pos-y center2))
     (dig-vertical-tunnel map (pos-y center1) (pos-y center2) (pos-x center1))))
 
-(defun generate-map (width height player)
+(defparameter *map-width* 100)
+(defparameter *map-height* 100)
+(defparameter *max-rooms* 30)
+(defparameter *max-room-monsters* 3)
+(defparameter *max-room-size* 10)
+(defparameter *min-room-size* 6)
+
+(defun generate-map (width height)
   "Generates a map."
-  (setq *map* (make-hash-table :test #'equal))
-  (let ((set-player-pos nil)
+  (let ((map (make-instance 'rmap))
         (rooms '())
         (last-room nil))
     (loop for room-num upto (1- *max-rooms*)
@@ -295,16 +306,16 @@
                (when (notany (lambda (r) (rect-intersects-p r room)) rooms)
                  ;; fill the map with this room
                  (loop for pos in (rect->positions room)
-                       do (setf (gethash pos *map*) (make-instance 'tile)))
-                 ;; player is set to the first room
-                 (when (not set-player-pos)
-                   (place-at player *map* (rect-center room)))
-                 (spawn-monsters *map* room)
+                       do (setf (gethash pos (map-tiles map)) (make-instance 'tile)))
+                 (when (not (map-start-pos map))
+                   (setf (map-start-pos map) (rect-center room)))
+                 (spawn-monsters map room *max-room-monsters*)
                  ;; connect the rooms
                  (when last-room
-                   (connect-rooms *map* room last-room))
+                   (connect-rooms map room last-room))
                  (setf last-room room)
-                 (push room rooms))))))
+                 (push room rooms))))
+    map))
 
 
 (input-handler
@@ -313,8 +324,9 @@
    (declare (ignore cmd)
             (ignore args)
             (ignore thingy))
-   (generate-map *map-width* *map-height* *player*)
-   (format t "Map generated.~%")))
+   (let ((map (generate-map *map-width* *map-height*)))
+     (place-at *player* map (map-start-pos map))
+     (format t "Map generated.~%"))))
 
 (defun game-loop (player)
   "Main game loop."
@@ -333,8 +345,8 @@
                                 :name "player"
                                 :char '@'
                                 :blocks t))
-  (add-thingy *player*)
-  (generate-map *map-width* *map-height* *player*))
+  (let ((map (generate-map *map-width* *map-height*)))
+    (place-at *player* map (map-start-pos map))))
 
 (defun main ()
   "Main function."
@@ -365,7 +377,7 @@
 
 (defun draw-map (thingy)
   "Draws the map for thingy."
-  (let* ((map (thingy-map thingy))
+  (let* ((map (map-tiles (thingy-map thingy)))
          (pos (thingy-pos thingy))
          (x (pos-x pos))
          (y (pos-y pos)))
@@ -374,7 +386,7 @@
                (loop for x from (- x (vision thingy)) upto (+ x (vision thingy))
                      do (let* ((map-pos (to-pos x y))
                                (tile (gethash map-pos map))
-                               (map-thingy (car (thingies-at map-pos))))
+                               (map-thingy (car (thingies-at (thingy-map thingy) map-pos))))
                           (cond
                             ((equal pos map-pos)
                              (princ (thingy-char thingy)))
@@ -420,7 +432,7 @@
   "Tries to move the thingy the direction."
   (let* ((pos (thingy-pos thingy))
          (new-pos (dir-pos dir pos))
-         (tile (gethash new-pos (thingy-map thingy))))
+         (tile (map-tile-at (thingy-map thingy) new-pos)))
     (cond
       ((not tile)
        (format t "You cannot move ~a.~%" (dir-name dir)))
