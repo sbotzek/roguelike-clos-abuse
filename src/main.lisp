@@ -18,6 +18,7 @@
 
 (defparameter *input-handlers* '())
 (defun input-handler (cmd handler)
+  "Adds a new input handler for the cmd."
   (if (listp cmd)
       (loop for c in cmd
             do (input-handler c handler))
@@ -28,6 +29,7 @@
              nil)))
 
 (defun handle-input (thingy cmd args)
+  "Handles input from a thingy."
   (let* ((downcase-cmd (string-downcase cmd))
          (handler (loop for handler in *input-handlers*
                         when (equal downcase-cmd (cmd handler))
@@ -50,18 +52,16 @@
 handler in *input-handlers*
          do (format t "~a~%" (cmd handler)))))
 
-;;; parses an argument from the input
-;;; returns next-arg, rest
 (defun parse-argument (input)
+  "Parses an argument from the input.  Returns next-arg, rest."
   (let ((idx (position #\Space input)))
     (if idx
         (values (subseq input 0 idx)
                 (string-left-trim '(#\Space #\Tab) (subseq input (1+ idx))))
         (values input nil))))
 
-;;; parses all arguments from the input
-;;; returns multiple values
 (defun parse-all-arguments (input)
+  "Parses all arguments from the input.  Returns them as multiple values."
   (labels ((compute (in sofar)
              (multiple-value-bind (arg rest) (parse-argument in)
                (if arg
@@ -88,23 +88,34 @@ handler in *input-handlers*
            :initform nil
            :accessor blocks)))
 
-(defun to-pos (x y) (cons x y))
-(defun pos-x (pos) (car pos))
-(defun pos-y (pos) (cdr pos))
+(defun to-pos (x y)
+  "Turns an x, y pair into a position."
+  (cons x y))
+(defun pos-x (pos)
+  "Returns the x part of a position."
+  (car pos))
+(defun pos-y (pos)
+  "Returns the y part of a position."
+  (cdr pos))
 (defun pos-sub (pos1 pos2)
+  "Subtracts two positions."
   (to-pos (- (pos-x pos1) (pos-x pos2))
           (- (pos-y pos1) (pos-y pos2))))
 (defun pos-add (pos1 pos2)
+  "Adds two positions."
   (to-pos (+ (pos-x pos1) (pos-x pos2))
           (+ (pos-y pos1) (pos-y pos2))))
 (defun pos-mul (pos m)
+  "Multiplies a position by a number.  The result is rounded off."
   (to-pos (round (* (pos-x pos) m))
           (round (* (pos-y pos) m))))
 (defun distance (pos1 pos2)
+  "Calculates the distance between two positions."
   (sqrt
    (+ (expt (- (pos-x pos1) (pos-x pos2)) 2)
       (expt (- (pos-y pos1) (pos-y pos2)) 2))))
 (defun points-between (pos1 pos2)
+  "Returns a list of points between two positions."
   (let ((pos-diff (pos-sub pos2 pos1))
         (last-pos nil))
     (loop for i from 1 upto 19
@@ -121,11 +132,13 @@ handler in *input-handlers*
 (defparameter *monster-table* '())
 
 (defun thingies-at (pos)
+  "Returns all thingies at the position."
   (loop for thingy in *thingies*
         if (equal (thingy-pos thingy) pos)
           collect thingy))
 
 (defun add-thingy (thingy)
+  "Adds a thingy to the list of thingies."
   (push thingy *thingies*))
 
 (defclass goblin (thingy)
@@ -164,6 +177,7 @@ handler in *input-handlers*
 (defparameter *min-room-size* 6)
 
 (defun move-to (thingy new-pos)
+  "Moves a thingy to a new position."
   (let ((pos (thingy-pos thingy)))
     (when (blocks thingy)
       (when pos
@@ -171,8 +185,10 @@ handler in *input-handlers*
       (setf (blocked (gethash new-pos *map*)) t))
     (setf (thingy-pos thingy) new-pos)))
 
-(defgeneric has-los-p (map thingy pos))
+(defgeneric has-los-p (map thingy pos)
+  (:documentation "Checks to see if a thingy has line of site to the position."))
 (defmethod has-los-p (map thingy pos)
+  "Default implementation."
   (not
    (loop for point in (points-between (thingy-pos thingy) pos)
          for tile = (gethash point map)
@@ -180,15 +196,17 @@ handler in *input-handlers*
            return t)))
 
 (defun can-see-p (map thingy pos)
+  "Checks to see if thingy can see a position."
   (and (> (vision thingy)
           (distance (thingy-pos thingy) pos))
        (has-los-p map thingy pos)))
 
-;;; returns a random number in the range (inclusive)
 (defun random-range (from to)
+  "Returns a random number in the range (inclusive)."
   (+ from (random (1+ (- to from)))))
 
 (defun random-percent ()
+  "Returns a random percent."
   (1+ (random 100)))
 
 (defclass rect ()
@@ -201,8 +219,8 @@ handler in *input-handlers*
    (y2 :initarg :y2
        :reader rect-y2)))
 
-;;; returns the center of the rect
 (defun rect-center (rect)
+  "Returns the center of the rect."
   (with-slots ((x1 x1)
                (y1 y1)
                (x2 x2)
@@ -210,13 +228,14 @@ handler in *input-handlers*
     (to-pos (floor (/ (+ x1 x2) 2))
             (floor (/ (+ y1 y2) 2)))))
 
-;;; turns the rect into a list of positions the rect covers
 (defun rect->positions (rect)
+  "Turns the rect into a list of positions the rect covers."
   (loop for y from (rect-y1 rect) upto (rect-y2 rect)
         append (loop for x from (rect-x1 rect) upto (rect-x2 rect)
                      collect (to-pos x y))))
 
 (defun rect-intersects-p (rect1 rect2)
+  "Returns true when rect1 and rect2 intersect eachother."
   (some (lambda (pos)
           (some (lambda (pos2)
                   (equal pos pos2))
@@ -224,6 +243,7 @@ handler in *input-handlers*
         (rect->positions rect1)))
 
 (defun spawn-monsters (map room)
+  "Spawns monsters in the room."
   (loop for i from 1 upto (random (1+ *max-room-monsters*))
         do (let* ((roll (random-percent))
                   (monster-type (cdr (find-if (lambda (m) (>= (car m) roll)) *monster-table*)))
@@ -235,16 +255,19 @@ handler in *input-handlers*
                       (move-to monster pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
+  "Digs a horizontal tunnel from x1 to x2 at y."
   (loop for x from (min x1 x2) upto (max x1 x2)
         for pos = (to-pos x y)
         do (setf (gethash pos map) (make-instance 'tile))))
 
 (defun dig-vertical-tunnel (map y1 y2 x)
+  "Digs a vertical tunnel from y1 to y2 at x."
   (loop for y from (min y1 y2) upto (max y1 y2)
         for pos = (to-pos x y)
         do (setf (gethash pos map) (make-instance 'tile))))
 
 (defun connect-rooms (map room1 room2)
+  "Connects room1 with room2."
   (let* ((roll (random 2))
          (center1 (rect-center (if (= 0 roll) room1 room2)))
          (center2 (rect-center (if (= 0 roll) room2 room1))))
@@ -252,6 +275,7 @@ handler in *input-handlers*
     (dig-vertical-tunnel map (pos-y center1) (pos-y center2) (pos-x center1))))
 
 (defun generate-map (width height player)
+  "Generates a map."
   (setq *map* (make-hash-table :test #'equal))
   (let ((set-player-pos nil)
         (rooms '())
@@ -287,9 +311,8 @@ handler in *input-handlers*
    (generate-map *map-width* *map-height* *player*)
    (format t "Map generated.~%")))
 
-;(+ 6 (random (1+ (- 10 6))))
-;;; main game loop
 (defun game-loop (player)
+  "Main game loop."
   (format t "~%> ")
   (let ((input (string-trim '(#\Space #\Tab) (read-line))))
     (when (not (equal "" input))
@@ -299,6 +322,7 @@ handler in *input-handlers*
       (game-loop player))))
 
 (defun init ()
+  "Initializes the game."
   (setf *quit* nil)
   (setf *player* (make-instance 'thingy
                                 :name "player"
@@ -308,6 +332,7 @@ handler in *input-handlers*
   (generate-map *map-width* *map-height* *player*))
 
 (defun main ()
+  "Main function."
   (init)
   (game-loop *player*))
 
@@ -333,7 +358,8 @@ handler in *input-handlers*
         (format t "You look at the ~a~%" at)
         (format t "Look at what?~%")))))
 
-(defun do-scan (thingy)
+(defun draw-map (thingy)
+  "Draws the map."
   (let* ((pos (thingy-pos thingy))
          (x (pos-x pos))
          (y (pos-y pos)))
@@ -360,9 +386,10 @@ handler in *input-handlers*
  (lambda (thingy cmd args)
    (declare (ignore cmd)
             (ignore args))
-   (do-scan thingy)))
+   (draw-map thingy)))
 
 (defun dir-name (dir)
+  "Converts a direction to a name."
   (case dir
     (:n "north")
     (:s "south")
@@ -370,6 +397,7 @@ handler in *input-handlers*
     (:w "west")))
 
 (defun dir-pos (dir from-pos)
+  "Returns position you'd end up at if you move the direction."
   (let* ((x (pos-x from-pos))
          (y (pos-y from-pos))
          (new-x (case dir
@@ -382,7 +410,8 @@ handler in *input-handlers*
                   (otherwise y))))
     (to-pos new-x new-y)))
 
-(defun do-move (thingy dir)
+(defun try-move (thingy dir)
+  "Tries to move the thingy the direction."
   (let* ((pos (thingy-pos thingy))
          (new-pos (dir-pos dir pos))
          (tile (gethash new-pos *map*)))
@@ -393,26 +422,26 @@ handler in *input-handlers*
        (format t "Someone is already in there.~%"))
       (t (progn (format t "You move ~a.~%" (dir-name dir))
                 (move-to thingy new-pos)
-                (do-scan thingy))))))
+                (draw-map thingy))))))
 
 (input-handler
  '("n" "s" "e" "w")
  (lambda (thingy cmd args)
    (declare (ignore args))
-   (do-move thingy (intern (string-upcase cmd) :keyword))))
+   (try-move thingy (intern (string-upcase cmd) :keyword))))
 
 
 
 ;;; Traits!
 (defclass trait () ())
 
-;;; checks to see if thingy has the trait
 (defun has-trait-p (thingy trait)
+  "Returns true if thingy has the trait."
   (some (lambda (o) (equal o trait))
         (mapcar 'class-name (sb-mop:class-direct-superclasses (class-of thingy)))))
 
-;;; add a trait to a thingy
 (defun add-trait (thingy trait)
+  "Add a trait to a thingy."
   ;; Since every thingy has its own class, we can just add the trait as a superclass to
   ;; that mob's class.
   (let* ((class (class-of thingy))
@@ -421,8 +450,8 @@ handler in *input-handlers*
     (sb-mop:ensure-class class-name
                          :direct-superclasses (cons trait superclasses))))
 
-;;; remove a trait from a thingy
 (defun remove-trait (thingy trait)
+  "Remove a trait from a thingy."
   (let* ((class (class-of thingy))
          (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
          (class-name (class-name class)))
@@ -455,6 +484,7 @@ handler in *input-handlers*
 
 (defclass trait-x-ray-vision (trait) ())
 (defmethod has-los-p (map (thingy trait-x-ray-vision) pos)
+  "x-ray-vision always gives you line of sight."
   t)
 
 (main)
