@@ -87,6 +87,9 @@
    (vision :initarg :vision
            :initform 10
            :accessor vision)
+   (blocks-vision-p :initarg :blocks-vision-p
+                  :initform nil
+                  :accessor blocks-vision-p)
    (blocks :initarg :blocks
            :initform nil
            :accessor blocks)))
@@ -203,7 +206,10 @@
   (not
    (loop for point in (points-between (thingy-pos thingy) pos)
          for tile = (map-tile-at (thingy-map thingy) point)
+         for thingies = (thingies-at (thingy-map thingy) point)
          when (not tile)
+           return t
+         when (some 'blocks-vision-p thingies)
            return t)))
 
 (defun can-see-p (thingy pos)
