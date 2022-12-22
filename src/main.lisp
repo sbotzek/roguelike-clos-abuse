@@ -49,7 +49,7 @@
             (ignore args)
             (ignore thingy))
    (loop for
-handler in *input-handlers*
+         handler in *input-handlers*
          do (format t "~a~%" (cmd handler)))))
 
 (defun parse-argument (input)
@@ -120,11 +120,11 @@ handler in *input-handlers*
         (last-pos nil))
     (loop for i from 1 upto 19
           for new-pos = (pos-add pos1
-                           (pos-mul pos-diff (* 0.05 i)))
+                                 (pos-mul pos-diff (* 0.05 i)))
           when (and (not (equal last-pos new-pos))
                     (not (equal pos1 new-pos))
                     (not (equal pos2 new-pos)))
-          collect new-pos
+            collect new-pos
           do (setf last-pos new-pos))))
 
 (defparameter *player* nil)
@@ -249,10 +249,10 @@ handler in *input-handlers*
                   (monster-type (cdr (find-if (lambda (m) (>= (car m) roll)) *monster-table*)))
                   (pos (to-pos (random-range (rect-x1 room) (rect-x2 room))
                                (random-range (rect-y1 room) (rect-y2 room)))))
-                  (when (not (blocked (gethash pos map)))
-                    (let ((monster (make-instance monster-type)))
-                      (add-thingy monster)
-                      (place-at monster pos))))))
+             (when (not (blocked (gethash pos map)))
+               (let ((monster (make-instance monster-type)))
+                 (add-thingy monster)
+                 (place-at monster pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   "Digs a horizontal tunnel from x1 to x2 at y."
@@ -286,7 +286,7 @@ handler in *input-handlers*
                     (room-left (random (- width room-width)))
                     (room-top (random (- height room-height)))
                     (room (make-instance 'rect :x1 room-left :y1 room-top
-                                         :x2 (+ room-left room-width) :y2 (+ room-top room-height))))
+                                               :x2 (+ room-left room-width) :y2 (+ room-top room-height))))
                (when (notany (lambda (r) (rect-intersects-p r room)) rooms)
                  ;; fill the map with this room
                  (loop for pos in (rect->positions room)
@@ -354,9 +354,9 @@ handler in *input-handlers*
    (declare (ignore cmd)
             (ignore thingy))
    (multiple-value-bind (at) (parse-all-arguments args)
-    (if at
-        (format t "You look at the ~a~%" at)
-        (format t "Look at what?~%")))))
+     (if at
+         (format t "You look at the ~a~%" at)
+         (format t "Look at what?~%")))))
 
 (defun draw-map (thingy)
   "Draws the map."
