@@ -79,14 +79,20 @@ handler in *input-handlers*
          :initform nil
          :accessor thingy-char)
    (pos :initarg :pos
-        :initform nil
-        :accessor thingy-pos)
+             :initform nil
+             :accessor thingy-pos)
    (vision :initarg :vision
            :initform 10
            :accessor vision)
    (blocks :initarg :blocks
+            :initform nil
+            :accessor blocks)
+   (traits :initargs :traits
            :initform nil
-           :accessor blocks)))
+           :accessor traits)))
+
+(defun has-trait-p (thingy trait)
+  (assoc trait (traits thingy)))
 
 (defun to-pos (x y) (cons x y))
 (defun pos-x (pos) (car pos))
@@ -171,13 +177,14 @@ handler in *input-handlers*
       (setf (blocked (gethash new-pos *map*)) t))
     (setf (thingy-pos thingy) new-pos)))
 
-(defgeneric has-los-p (map thingy pos))
-(defmethod has-los-p (map thingy pos)
-  (not
-   (loop for point in (points-between (thingy-pos thingy) pos)
-         for tile = (gethash point map)
-         when (not tile)
-           return t)))
+(defun has-los-p (map thingy pos)
+  (cond
+    ((has-trait-p thingy :x-ray-vision) t)
+    (t (not
+        (loop for point in (points-between (thingy-pos thingy) pos)
+              for tile = (gethash point map)
+              when (not tile)
+                return t)))))
 
 (defun can-see-p (map thingy pos)
   (and (> (vision thingy)
@@ -401,60 +408,5 @@ handler in *input-handlers*
    (declare (ignore args))
    (do-move thingy (intern (string-upcase cmd) :keyword))))
 
-
-
-;;; Traits!
-(defclass trait () ())
-
-;;; checks to see if thingy has the trait
-(defun has-trait-p (thingy trait)
-  (some (lambda (o) (equal o trait))
-        (mapcar 'class-name (sb-mop:class-direct-superclasses (class-of thingy)))))
-
-;;; add a trait to a thingy
-(defun add-trait (thingy trait)
-  ;; Since every thingy has its own class, we can just add the trait as a superclass to
-  ;; that mob's class.
-  (let* ((class (class-of thingy))
-         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
-         (class-name (class-name class)))
-    (sb-mop:ensure-class class-name
-                         :direct-superclasses (cons trait superclasses))))
-
-;;; remove a trait from a thingy
-(defun remove-trait (thingy trait)
-  (let* ((class (class-of thingy))
-         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
-         (class-name (class-name class)))
-    (sb-mop:ensure-class class-name
-                         :direct-superclasses (remove-if (lambda (superclass) (equal superclass trait))
-                                                         superclasses))))
-
-(input-handler
- "trait"
- (lambda (thingy cmd args)
-   (declare (ignore cmd))
-   (if args
-       (let* ((trait (intern (string-upcase (concatenate 'string "trait-" args))))
-              (trait-class (find-class trait nil)))
-         (cond
-           ((or (not trait-class)
-                (notany (lambda (c) (eq 'trait (class-name c))) (sb-mop:class-direct-superclasses trait-class)))
-            (format t "Could not find trait ~a~%" args))
-           ((has-trait-p thingy trait)
-            (progn
-              (format t "Removing trait ~a.~%" args)
-              (remove-trait thingy trait)))
-           (t (progn
-                (format t "Adding trait ~a.~%" args)
-                (add-trait thingy trait)))))
-       (progn (format t "Please specify a trait.~%Possible options:~%")
-              (loop for trait in (sb-mop:class-direct-subclasses (find-class 'trait))
-                    for trait-name = (subseq (string (class-name trait)) (length "trait-"))
-                    do (format t "~a~%" trait-name))))))
-
-(defclass trait-x-ray-vision (trait) ())
-(defmethod has-los-p (map (thingy trait-x-ray-vision) pos)
-  t)
 
 (main)

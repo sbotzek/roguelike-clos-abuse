@@ -1,5 +1,8 @@
 # Development Log
 
+# 2022-12-21
+The name of this is "CLOS abuse".  Let's see if we can abuse CLOS to add traits.
+
 # 2022-12-17
 Lets line of sight and mapping mechanics.
 
