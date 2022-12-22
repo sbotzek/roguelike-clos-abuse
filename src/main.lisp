@@ -176,8 +176,8 @@ handler in *input-handlers*
 (defparameter *max-room-size* 10)
 (defparameter *min-room-size* 6)
 
-(defun move-to (thingy new-pos)
-  "Moves a thingy to a new position."
+(defun place-at (thingy new-pos)
+  "Places a thingy at a position."
   (let ((pos (thingy-pos thingy)))
     (when (blocks thingy)
       (when pos
@@ -252,7 +252,7 @@ handler in *input-handlers*
                   (when (not (blocked (gethash pos map)))
                     (let ((monster (make-instance monster-type)))
                       (add-thingy monster)
-                      (move-to monster pos))))))
+                      (place-at monster pos))))))
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   "Digs a horizontal tunnel from x1 to x2 at y."
@@ -293,7 +293,7 @@ handler in *input-handlers*
                        do (setf (gethash pos *map*) (make-instance 'tile)))
                  ;; player is set to the first room
                  (when (not set-player-pos)
-                   (move-to player (rect-center room)))
+                   (place-at player (rect-center room)))
                  (spawn-monsters *map* room)
                  ;; connect the rooms
                  (when last-room
@@ -421,7 +421,7 @@ handler in *input-handlers*
       ((blocked tile)
        (format t "Someone is already in there.~%"))
       (t (progn (format t "You move ~a.~%" (dir-name dir))
-                (move-to thingy new-pos)
+                (place-at thingy new-pos)
                 (draw-map thingy))))))
 
 (input-handler
