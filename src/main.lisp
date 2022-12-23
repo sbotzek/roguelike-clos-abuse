@@ -3,6 +3,37 @@
 ;;; Set to true to quit
 (defparameter *quit* t)
 
+(defgeneric added-superclass (object class))
+(defgeneric removed-superclass (object class))
+
+(defun add-superclass (object new-superclass)
+  "Add a superclass to an object's class."
+  (let* ((class (class-of object))
+         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
+         (class-name (class-name class)))
+    (sb-mop:ensure-class class-name
+                         :direct-superclasses (cons new-superclass superclasses))
+    (added-superclass object new-superclass)))
+
+(defun remove-superclass (object remove-superclass)
+  "Remove a superclass from an object's class."
+  (let* ((class (class-of object))
+         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
+         (class-name (class-name class)))
+    (sb-mop:ensure-class class-name
+                         :direct-superclasses (remove-if (lambda (superclass) (equal superclass remove-superclass))
+                                                         superclasses))
+    (removed-superclass object remove-superclass)))
+
+(defun has-class-p (object classname)
+  "Returns true if object has the class."
+  (labels ((check-class (class)
+             (if (equal classname (class-name class))
+                 t
+                 (some (lambda (cl) (check-class cl))
+                       (sb-mop:class-direct-superclasses class)))))
+    (check-class (class-of object))))
+
 
 ;;; Input Handling
 
@@ -69,6 +100,16 @@
                    (reverse sofar)))))
     (values-list (compute input '()))))
 
+(defun parse-arguments-using-functions (input fs)
+  (labels ((compute (in fs sofar)
+             (let ((f (car fs)))
+               (if f
+                   (multiple-value-bind (arg rest) (parse-argument in)
+                     (if arg
+                         (compute rest (cdr fs) (cons (funcall f arg) sofar))
+                         (reverse sofar)))
+                   (reverse sofar)))))
+    (values-list (compute input fs '()))))
 
 ;;; da things
 (defclass thingy ()
@@ -93,6 +134,36 @@
    (blocks :initarg :blocks
            :initform nil
            :accessor blocks)))
+
+(defclass trait () ())
+
+(defun has-trait-p (thingy trait)
+  "Returns true if thingy has the trait."
+  (has-class-p thingy trait))
+
+(input-handler
+ "trait"
+ (lambda (thingy cmd args)
+   (declare (ignore cmd))
+   (if args
+       (let* ((trait (intern (string-upcase (concatenate 'string "trait-" args))))
+              (trait-class (find-class trait nil)))
+         (cond
+           ((or (not trait-class)
+                (notany (lambda (c) (eq 'trait (class-name c))) (sb-mop:class-direct-superclasses trait-class)))
+            (format t "Could not find trait ~a~%" args))
+           ((has-trait-p thingy trait)
+            (progn
+              (format t "Removing trait ~a.~%" args)
+              (remove-superclass thingy trait)))
+           (t (progn
+                (format t "Adding trait ~a.~%" args)
+                (add-superclass thingy trait)))))
+       (progn (format t "Please specify a trait.~%Possible options:~%")
+              (loop for trait in (sb-mop:class-direct-subclasses (find-class 'trait))
+                    for trait-name = (subseq (string (class-name trait)) (length "trait-"))
+                    do (format t "~a~%" trait-name))))))
+
 
 (defun to-pos (x y)
   "Turns an x, y pair into a position."
@@ -187,17 +258,20 @@
 (defun place-at (thingy new-map new-pos)
   "Places a thingy in a map at a position."
   (let ((old-map (thingy-map thingy))
-        (pos (thingy-pos thingy)))
+        (old-pos (thingy-pos thingy)))
+    ;; set new place
     (when (blocks thingy)
-      (when (and pos old-map)
-        (setf (blocked (map-tile-at old-map pos)) nil))
       (setf (blocked (map-tile-at new-map new-pos)) t))
-    (when (not (eq new-map old-map))
-      (when old-map
-        nil) ; TODO need to remove from old map
-      (push thingy (map-thingies new-map)))
     (setf (thingy-map thingy) new-map)
-    (setf (thingy-pos thingy) new-pos)))
+    (setf (thingy-pos thingy) new-pos)
+    (when (not (eq new-map old-map))
+      (push thingy (map-thingies new-map)))
+    ;; clean up old place
+    (when (and old-map old-pos)
+      (setf (blocked (map-tile-at old-map old-pos)) (some 'blocks (thingies-at old-map old-pos)))
+      (when (not (eq new-map old-map))
+        ;; TODO need to remove from old map
+        nil))))
 
 (defgeneric has-los-p (thingy pos)
   (:documentation "Checks to see if a thingy has line of site to the position."))
@@ -217,6 +291,25 @@
   (and (> (vision thingy)
           (distance (thingy-pos thingy) pos))
        (has-los-p thingy pos)))
+
+(defclass door (thingy)
+  ((name :initform "door")
+   (door-closed-p :initarg :door-closed-p
+                  :initform t
+                  :accessor door-closed-p)))
+(defmethod thingy-char ((thingy door))
+  (if (door-closed-p thingy)
+      "+"
+      "="))
+(defmethod blocks ((thingy door))
+  (door-closed-p thingy))
+(defmethod blocks-vision-p ((thingy door))
+  (door-closed-p thingy))
+(defmethod (setf door-closed-p) :after (new-value (d door))
+  (let ((map (thingy-map d))
+        (pos (thingy-pos d)))
+    (when (and map pos)
+      (setf (blocked (map-tile-at map pos)) new-value))))
 
 (defun random-range (from to)
   "Returns a random number in the range (inclusive)."
@@ -282,6 +375,25 @@
         for pos = (to-pos x y)
         do (setf (gethash pos (map-tiles map)) (make-instance 'tile))))
 
+(defun place-doors (map rooms)
+  "Places doors between rooms and tunnels."
+  (loop for room in rooms
+        do (progn
+             (loop for y from (rect-y1 room) upto (rect-y2 room)
+                   for left-pos = (to-pos (1- (rect-x1 room)) y)
+                   for right-pos = (to-pos (1+ (rect-x2 room)) y)
+                   when (map-tile-at map left-pos)
+                     do (place-at (make-instance 'door) map left-pos)
+                   when (map-tile-at map right-pos)
+                     do (place-at (make-instance 'door) map right-pos))
+             (loop for x from (rect-x1 room) upto (rect-x2 room)
+                   for top-pos = (to-pos x (1- (rect-y1 room)))
+                   for bottom-pos = (to-pos x (1+ (rect-y2 room)))
+                   when (map-tile-at map top-pos)
+                     do (place-at (make-instance 'door) map top-pos)
+                   when (map-tile-at map bottom-pos)
+                     do (place-at (make-instance 'door) map bottom-pos)))))
+
 (defun connect-rooms (map room1 room2)
   "Connects room1 with room2."
   (let* ((roll (random 2))
@@ -321,6 +433,7 @@
                    (connect-rooms map room last-room))
                  (setf last-room room)
                  (push room rooms))))
+    (place-doors map rooms)
     map))
 
 
@@ -420,6 +533,15 @@
     (:e "east")
     (:w "west")))
 
+(defun parse-dir (dirname)
+  (let ((dirname (string-downcase dirname)))
+    (cond
+      ((equal "n" dirname) :n)
+      ((equal "s" dirname) :s)
+      ((equal "e" dirname) :e)
+      ((equal "w" dirname) :w)
+      (t nil))))
+
 (defun dir-pos (dir from-pos)
   "Returns position you'd end up at if you move the direction."
   (let* ((x (pos-x from-pos))
@@ -434,6 +556,20 @@
                   (otherwise y))))
     (to-pos new-x new-y)))
 
+(defclass trait-ethereal (trait) ())
+(defmethod added-superclass ((thingy thingy) (class (eql 'trait-ethereal)))
+  (let ((map (thingy-map thingy))
+        (pos (thingy-pos thingy)))
+    (when (and map pos)
+      (setf (blocked (map-tile-at map pos)) (some 'blocks (thingies-at map pos))))))
+(defmethod removed-superclass ((thingy thingy) (class (eql 'trait-ethereal)))
+  (let ((map (thingy-map thingy))
+        (pos (thingy-pos thingy)))
+    (when (and map pos)
+      (setf (blocked (map-tile-at map pos)) (some 'blocks (thingies-at map pos))))))
+(defmethod blocks ((thingy trait-ethereal))
+  nil)
+
 (defun try-move (thingy dir)
   "Tries to move the thingy the direction."
   (let* ((pos (thingy-pos thingy))
@@ -442,7 +578,7 @@
     (cond
       ((not tile)
        (format t "You cannot move ~a.~%" (dir-name dir)))
-      ((blocked tile)
+      ((and (blocked tile) (not (has-trait-p thingy 'trait-ethereal)))
        (let ((thingy (car (remove-if-not 'blocks (thingies-at (thingy-map thingy) new-pos)))))
              (format t "~a blocks your way.~%" (name thingy))))
       (t (progn (format t "You move ~a.~%" (dir-name dir))
@@ -453,59 +589,41 @@
  '("n" "s" "e" "w")
  (lambda (thingy cmd args)
    (declare (ignore args))
-   (try-move thingy (intern (string-upcase cmd) :keyword))))
+   (multiple-value-bind (dir) (parse-arguments-using-functions cmd '(parse-dir))
+     (try-move thingy dir))))
 
-
-
-;;; Traits!
-(defclass trait () ())
-
-(defun has-trait-p (thingy trait)
-  "Returns true if thingy has the trait."
-  (some (lambda (o) (equal o trait))
-        (mapcar 'class-name (sb-mop:class-direct-superclasses (class-of thingy)))))
-
-(defun add-trait (thingy trait)
-  "Add a trait to a thingy."
-  ;; Since every thingy has its own class, we can just add the trait as a superclass to
-  ;; that mob's class.
-  (let* ((class (class-of thingy))
-         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
-         (class-name (class-name class)))
-    (sb-mop:ensure-class class-name
-                         :direct-superclasses (cons trait superclasses))))
-
-(defun remove-trait (thingy trait)
-  "Remove a trait from a thingy."
-  (let* ((class (class-of thingy))
-         (superclasses (mapcar 'class-name (sb-mop:class-direct-superclasses class)))
-         (class-name (class-name class)))
-    (sb-mop:ensure-class class-name
-                         :direct-superclasses (remove-if (lambda (superclass) (equal superclass trait))
-                                                         superclasses))))
 
 (input-handler
- "trait"
+ "open"
  (lambda (thingy cmd args)
    (declare (ignore cmd))
-   (if args
-       (let* ((trait (intern (string-upcase (concatenate 'string "trait-" args))))
-              (trait-class (find-class trait nil)))
-         (cond
-           ((or (not trait-class)
-                (notany (lambda (c) (eq 'trait (class-name c))) (sb-mop:class-direct-superclasses trait-class)))
-            (format t "Could not find trait ~a~%" args))
-           ((has-trait-p thingy trait)
-            (progn
-              (format t "Removing trait ~a.~%" args)
-              (remove-trait thingy trait)))
-           (t (progn
-                (format t "Adding trait ~a.~%" args)
-                (add-trait thingy trait)))))
-       (progn (format t "Please specify a trait.~%Possible options:~%")
-              (loop for trait in (sb-mop:class-direct-subclasses (find-class 'trait))
-                    for trait-name = (subseq (string (class-name trait)) (length "trait-"))
-                    do (format t "~a~%" trait-name))))))
+   (multiple-value-bind (dir) (parse-arguments-using-functions args '(parse-dir))
+     (if (not dir)
+         (format t "Usage: open [n | s | e | w]")
+         (let ((door (car (remove-if-not (lambda (door) (has-class-p door 'door))
+                                         (thingies-at (thingy-map thingy) (dir-pos dir (thingy-pos thingy)))))))
+           (if (not door)
+               (format t "I see no door to the ~a~%" (dir-name dir))
+               (if (not (door-closed-p door))
+                   (format t "That door is already open.~%")
+                   (progn (setf (door-closed-p door) nil)
+                          (format t "You open the door to the ~a~%." (dir-name dir))))))))))
+(input-handler
+ "close"
+ (lambda (thingy cmd args)
+   (declare (ignore cmd))
+   (multiple-value-bind (dir) (parse-arguments-using-functions args '(parse-dir))
+     (if (not dir)
+         (format t "Usage: close [n | s | e | w]")
+         (let ((door (car (remove-if-not (lambda (door) (has-class-p door 'door))
+                                         (thingies-at (thingy-map thingy) (dir-pos dir (thingy-pos thingy)))))))
+           (if (not door)
+               (format t "I see no door to the ~a~%" (dir-name dir))
+               (if (door-closed-p door)
+                   (format t "That door is already closed.~%")
+                   (progn (setf (door-closed-p door) t)
+                          (format t "You close the door to the ~a~%." (dir-name dir))))))))))
+
 
 (defclass trait-x-ray-vision (trait) ())
 (defmethod has-los-p ((thingy trait-x-ray-vision) pos)
