@@ -381,22 +381,23 @@
 
 (defun place-doors (map rooms)
   "Places doors between rooms and tunnels."
-  (loop for room in rooms
-        do (progn
-             (loop for y from (rect-y1 room) upto (rect-y2 room)
-                   for left-pos = (to-pos (1- (rect-x1 room)) y)
-                   for right-pos = (to-pos (1+ (rect-x2 room)) y)
-                   when (map-tile-at map left-pos)
-                     do (place-at (make-instance 'door) map left-pos)
-                   when (map-tile-at map right-pos)
-                     do (place-at (make-instance 'door) map right-pos))
-             (loop for x from (rect-x1 room) upto (rect-x2 room)
-                   for top-pos = (to-pos x (1- (rect-y1 room)))
-                   for bottom-pos = (to-pos x (1+ (rect-y2 room)))
-                   when (map-tile-at map top-pos)
-                     do (place-at (make-instance 'door) map top-pos)
-                   when (map-tile-at map bottom-pos)
-                     do (place-at (make-instance 'door) map bottom-pos)))))
+  (labels ((maybe-place-at (pos)
+             (when (map-tile-at map pos)
+               (place-at (make-instance 'door) map pos))))
+    (loop for room in rooms
+          do (progn
+               (loop for y from (rect-y1 room) upto (rect-y2 room)
+                     for left-pos = (to-pos (1- (rect-x1 room)) y)
+                     for right-pos = (to-pos (1+ (rect-x2 room)) y)
+                     do (progn
+                          (maybe-place-at left-pos)
+                          (maybe-place-at right-pos)))
+               (loop for x from (rect-x1 room) upto (rect-x2 room)
+                     for top-pos = (to-pos x (1- (rect-y1 room)))
+                     for bottom-pos = (to-pos x (1+ (rect-y2 room)))
+                     do (progn
+                          (maybe-place-at top-pos)
+                          (maybe-place-at bottom-pos)))))))
 
 (defun connect-rooms (map room1 room2)
   "Connects room1 with room2."
