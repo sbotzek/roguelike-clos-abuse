@@ -4,7 +4,11 @@
 (defparameter *quit* t)
 
 (defgeneric added-superclass (object class))
+(defmethod added-superclass (object class)
+  nil)
 (defgeneric removed-superclass (object class))
+(defmethod removed-superclass (object class)
+  nil)
 
 (defun add-superclass (object new-superclass)
   "Add a superclass to an object's class."
