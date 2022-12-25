@@ -190,6 +190,13 @@
   "Multiplies a position by a number.  The result is rounded off."
   (to-pos (round (* (pos-x pos) m))
           (round (* (pos-y pos) m))))
+(defun pos-neighbors (pos)
+  (let ((x (pos-x pos))
+        (y (pos-y pos)))
+    (list (to-pos (1+ x) y)
+          (to-pos (1- x) y)
+          (to-pos x (1+ y))
+          (to-pos x (1- y)))))
 (defun distance (pos1 pos2)
   "Calculates the distance between two positions."
   (sqrt
@@ -252,6 +259,10 @@
 
 (defun map-tile-at (map pos)
   (gethash pos (map-tiles map)))
+
+(defun neighbor-tiles (map pos)
+  (remove nil (mapcar (lambda (n) (map-tile-at map n))
+                      (pos-neighbors pos))))
 
 (defun thingies-at (map pos)
   "Returns all thingies at the position."
@@ -396,7 +407,8 @@
 (defun place-doors (map rooms)
   "Places doors between rooms and tunnels."
   (labels ((maybe-place-at (pos)
-             (when (map-tile-at map pos)
+             (when (and (map-tile-at map pos)
+                        (= 2 (length (neighbor-tiles map pos))))
                (place-at (make-instance 'door) map pos))))
     (loop for room in rooms
           do (progn
