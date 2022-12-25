@@ -369,15 +369,29 @@
 
 (defun dig-horizontal-tunnel (map x1 x2 y)
   "Digs a horizontal tunnel from x1 to x2 at y."
-  (loop for x from (min x1 x2) upto (max x1 x2)
-        for pos = (to-pos x y)
-        do (setf (gethash pos (map-tiles map)) (make-instance 'tile))))
+  (let ((digging nil))
+    (loop for x from (min x1 x2) upto (max x1 x2)
+          for pos = (to-pos x y)
+          for tile = (map-tile-at map pos)
+          when (and digging tile)
+            return nil
+          when (not tile)
+            do (progn
+                 (setf digging t)
+                 (setf (gethash pos (map-tiles map)) (make-instance 'tile))))))
 
 (defun dig-vertical-tunnel (map y1 y2 x)
   "Digs a vertical tunnel from y1 to y2 at x."
-  (loop for y from (min y1 y2) upto (max y1 y2)
-        for pos = (to-pos x y)
-        do (setf (gethash pos (map-tiles map)) (make-instance 'tile))))
+  (let ((digging nil))
+    (loop for y from (min y1 y2) upto (max y1 y2)
+          for pos = (to-pos x y)
+          for tile = (map-tile-at map pos)
+          when (and digging tile)
+            return nil
+          when (not tile)
+            do (progn
+                 (setf digging t)
+                 (setf (gethash pos (map-tiles map)) (make-instance 'tile))))))
 
 (defun place-doors (map rooms)
   "Places doors between rooms and tunnels."
