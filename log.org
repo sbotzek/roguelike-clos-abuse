@@ -1,6 +1,7 @@
 #+TITLE: Development Log
 #+STARTUP: overview
 
+* TODO input should not require the enter key to be pressed
 * 2022-12-21
 The name of this is "CLOS abuse".  Let's see if we can abuse CLOS to add traits.
 
